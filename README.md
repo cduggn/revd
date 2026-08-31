@@ -1,34 +1,57 @@
 # revd
 
-A grounding ledger. `revd` reviews every commit silently in the background,
-records what shipped and whether you or an agent wrote it, and only interrupts
-when something must be fixed. It describes events; it never grades people.
-
-- Zero latency in the authoring loop — hooks enqueue and exit
-- Silent by default — one notification per commit at most, everything else is pull
-- Nothing enters the agent's context unless the agent asks (`revd mcp`)
-- Every number has a denominator and a link to a diff
-
-See [docs/SPEC.md](docs/SPEC.md), [docs/TAXONOMY.md](docs/TAXONOMY.md), [docs/ROADMAP.md](docs/ROADMAP.md).
-
-## Try it
+Detect what a project is written in, then set up the checks those languages
+deserve — linters, secret scanning, dependency audits, and a pre-commit hook —
+in one command.
 
 ```sh
-cargo build --release
-./target/release/revd install     # writes .git/hooks/post-commit in the current repo
-./target/release/revd daemon &    # background worker
-git commit -m "..."               # analysed asynchronously
-./target/release/revd show        # findings for HEAD
-./target/release/revd status      # statusline: "revd ⚠3" or nothing
+revd plan     # what would change, writes nothing
+revd init     # write missing configs + install the pre-commit hook
+revd doctor   # what's installed, what's missing, where the gaps are
+revd tools    # every tool revd knows about
 ```
+
+Languages: Go, TypeScript, Python, Rust, Java.
+
+## Principles
+
+- **Detection is deterministic.** `go.mod`, `Cargo.toml`, `pyproject.toml`,
+  `package.json`, `pom.xml`. No AI, no network, no account, no API key.
+- **revd never installs anything.** It prints the command; you stay in control.
+- **Your configs are yours.** Generated files are committed to your repo and
+  never overwritten. An existing config is left alone.
+- **Only secrets block a commit.** Everything else is advisory. A missing tool
+  is skipped, never an error.
+- **A foreign pre-commit hook is never touched** without `--force`.
+
+## Adding a tool
+
+Define one `ToolSpec` in `src/tools/registry.rs` and add it to `ALL`. There is
+no trait to implement and no dispatch to wire — a tool is data:
+
+```rust
+pub const RUFF: ToolSpec = ToolSpec {
+    id: "ruff",
+    role: Role::Lint,
+    langs: &[Lang::Python],
+    binary: "ruff",
+    probe: None,
+    version_args: &["--version"],
+    install: Install::Brew("ruff"),
+    config_files: &["ruff.toml", ".ruff.toml"],
+    template: Some(Template { path: "ruff.toml", contents: include_str!("../../templates/ruff.toml") }),
+    scan_args: &["check", "--output-format=sarif"],
+    output: Output::Sarif,
+    why: "replaces flake8, isort, bandit and pyupgrade in one fast binary",
+    note: "MIT. Also covers formatting via `ruff format`.",
+};
+```
+
+`revd tools` prints the registry, so the extension point is visible from the CLI.
 
 ## Status
 
-End-to-end slice works: commit → hook → socket → daemon → tier1 heuristics →
-SQLite → `revd show`. Hook overhead is ~11ms on top of `git commit`.
+`init` / `plan` / `doctor` / `tools` work. 17 tools across 5 languages.
 
-Implemented: git hook install, daemon, diff parsing, 10 tier1 rules (Go/TS/common),
-storage, `show`, `status`, one-notification-per-commit.
-
-Not yet: tier0 linters, tier2 LLM, Claude Code hook capture, attribution,
-`ledger`, `mcp`, `mute`/`dismiss`, `pre-push` blocking. See docs/ROADMAP.md.
+The commit-analysis layer — AI review of what tools can't check, and the
+activity ledger — is not built yet. See `docs/ROADMAP.md`.

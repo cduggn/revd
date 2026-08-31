@@ -1,134 +1,108 @@
-//! revd — a grounding ledger. See docs/SPEC.md.
-mod analyze;
-mod attrib;
-mod daemon;
+//! revd — set a project up with the checks its languages deserve, then keep
+//! an eye on what gets committed. See docs/SPEC.md.
 mod git;
-mod hook;
-mod install;
-mod ledger;
-mod mcp;
-mod store;
-mod surface;
-mod taxonomy;
+mod hooks;
+mod lang;
+mod plan;
+mod report;
+mod tools;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
     name = "revd",
     version,
-    about = "Silent background code review with agent attribution"
+    about = "Detect a project's languages and set up the checks they deserve"
 )]
 struct Cli {
+    /// Project root (defaults to the git toplevel, else the current directory)
+    #[arg(long, global = true)]
+    root: Option<PathBuf>,
     #[command(subcommand)]
     cmd: Cmd,
 }
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Run the background worker
-    Daemon,
-    /// Called by git / Claude Code hooks; enqueues and exits
-    Hook { event: String },
-    /// Install git hooks into the current repository
-    Install,
-    /// Findings for a commit (default HEAD)
-    Show {
-        sha: Option<String>,
-        /// Analyse now instead of reading stored results
+    /// Write missing configs and install the pre-commit hook
+    Init {
+        /// Overwrite existing configs and a foreign pre-commit hook
         #[arg(long)]
-        rerun: bool,
+        force: bool,
     },
-    /// Counts-with-denominators table
-    Ledger {
-        #[arg(long, default_value_t = 30)]
-        days: u32,
-        #[arg(long)]
-        lang: Option<String>,
-        #[arg(long)]
-        category: Option<String>,
-    },
-    /// One-line statusline output
-    Status,
-    /// Suppress a rule from alert level
-    Mute { rule: String },
-    /// Dismiss a finding by id
-    Dismiss { id: String },
-    /// On-demand deep review
-    Review {
-        target: Option<String>,
-        #[arg(long, default_value = "sonnet")]
-        model: String,
-    },
-    /// stdio MCP server (pull-only agent access)
-    Mcp,
+    /// Show what `init` would do, changing nothing
+    Plan,
+    /// Report which tools and configs are present, and what is missing
+    Doctor,
+    /// List every tool revd knows about
+    Tools,
+}
+
+fn resolve_root(explicit: Option<PathBuf>) -> Result<PathBuf> {
+    if let Some(p) = explicit {
+        return Ok(p);
+    }
+    let cwd = std::env::current_dir()?;
+    Ok(git::toplevel(&cwd).map(PathBuf::from).unwrap_or(cwd))
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "revd=info".into()),
-        )
-        .with_writer(std::io::stderr)
-        .init();
+    let cli = Cli::parse();
+    let root = resolve_root(cli.root)?;
 
-    match Cli::parse().cmd {
-        Cmd::Daemon => daemon::serve(),
-        Cmd::Hook { event } => hook::dispatch(&event),
-        Cmd::Install => install::run(),
-        Cmd::Show { sha, rerun } => show(sha, rerun),
-        Cmd::Status => status(),
-        _ => anyhow::bail!("not implemented yet"),
+    match cli.cmd {
+        Cmd::Tools => {
+            report::registry();
+            Ok(())
+        }
+        Cmd::Plan => {
+            let p = plan::build(&root)?;
+            report::languages(&p);
+            report::tools(&p);
+            report::hook(&p);
+            report::notes(&p);
+            report::summary(&p);
+            println!("\nnothing was written — run `revd init` to apply");
+            Ok(())
+        }
+        Cmd::Doctor => {
+            let p = plan::build(&root)?;
+            report::languages(&p);
+            report::tools(&p);
+            report::role_coverage(&p);
+            report::hook(&p);
+            Ok(())
+        }
+        Cmd::Init { force } => {
+            let p = plan::build(&root)?;
+            report::languages(&p);
+            let written = plan::apply(&p, force)?;
+            if written.is_empty() {
+                println!("\nnothing to do — already configured");
+            } else {
+                println!("\nwrote:");
+                for w in &written {
+                    let shown = w.strip_prefix(&root).unwrap_or(w);
+                    println!("  {}", shown.display());
+                }
+            }
+            let missing = p.missing_tools();
+            if !missing.is_empty() {
+                println!("\ninstall the tools you want (revd never installs anything itself):");
+                for t in missing {
+                    println!("  {:<16} {}", t.spec.id, t.spec.install.command());
+                }
+            }
+            if let crate::hooks::HookPlan::Foreign(path) = &p.hook {
+                println!(
+                    "\nleft your existing pre-commit hook alone: {}\n  re-run with --force to replace it",
+                    path.display()
+                );
+            }
+            Ok(())
+        }
     }
-}
-
-/// Resolve a sha argument against the current repo, defaulting to HEAD.
-fn resolve(sha: Option<String>) -> Result<(String, String)> {
-    let cwd = std::env::current_dir()?;
-    let repo = git::toplevel(&cwd)?;
-    let sha = match sha {
-        Some(s) => s,
-        None => git::head(Path::new(&repo))?,
-    };
-    Ok((repo, sha))
-}
-
-fn show(sha: Option<String>, rerun: bool) -> Result<()> {
-    let (repo, sha) = resolve(sha)?;
-    let conn = store::open()?;
-    if rerun {
-        daemon::process_commit(&conn, &repo, &sha)?;
-    }
-    let rows = store::findings_for_sha(&conn, &sha)?;
-    let short = &sha[..7.min(sha.len())];
-    if rows.is_empty() {
-        println!("{short}: no findings");
-        return Ok(());
-    }
-    println!("{short} — {} finding(s)\n", rows.len());
-    for (file, line, category, severity, title, evidence, fix_hint) in rows {
-        println!("{file}:{line}  [{severity}] {category}");
-        println!("  {title}");
-        println!("  > {evidence}");
-        println!("  fix: {fix_hint}\n");
-    }
-    Ok(())
-}
-
-/// Statusline: a count, or nothing at all. Must never error into the prompt.
-fn status() -> Result<()> {
-    let Ok((_, sha)) = resolve(None) else {
-        return Ok(());
-    };
-    let Ok(conn) = store::open() else {
-        return Ok(());
-    };
-    match store::alert_count(&conn, &sha) {
-        Ok(n) if n > 0 => println!("revd ⚠{n}"),
-        _ => {}
-    }
-    Ok(())
 }
