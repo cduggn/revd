@@ -114,7 +114,14 @@ pub struct ToolSpec {
 
 impl ToolSpec {
     /// Does this tool apply to a project containing these languages?
+    ///
+    /// A project with no recognised language gets no tools at all — not even
+    /// the language-agnostic ones. Otherwise `revd init` in a home directory
+    /// or a docs repo would scatter config files for a project that isn't there.
     pub fn applies_to(&self, langs: &[Lang]) -> bool {
+        if langs.is_empty() {
+            return false;
+        }
         self.langs.is_empty() || self.langs.iter().any(|l| langs.contains(l))
     }
 
@@ -187,16 +194,28 @@ mod tests {
     fn template_paths_are_relative() {
         for t in registry::ALL {
             if let Some(tpl) = t.template {
-                assert!(!tpl.path.starts_with('/'), "{}: absolute template path", t.id);
+                assert!(
+                    !tpl.path.starts_with('/'),
+                    "{}: absolute template path",
+                    t.id
+                );
                 assert!(!tpl.contents.is_empty(), "{}: empty template", t.id);
             }
         }
     }
 
     #[test]
-    fn language_agnostic_tools_apply_everywhere() {
+    fn language_agnostic_tools_apply_to_any_known_language() {
         let gitleaks = registry::ALL.iter().find(|t| t.id == "gitleaks").unwrap();
         assert!(gitleaks.applies_to(&[Lang::Java]));
         assert!(gitleaks.applies_to(&[Lang::Rust]));
+    }
+
+    #[test]
+    fn no_languages_means_no_tools() {
+        assert!(
+            for_languages(&[]).is_empty(),
+            "a directory with no recognised project must get no tools"
+        );
     }
 }

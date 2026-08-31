@@ -48,7 +48,10 @@ impl Plan {
     }
 
     pub fn missing_tools(&self) -> Vec<&ToolPlan> {
-        self.tools.iter().filter(|t| t.installed.is_none()).collect()
+        self.tools
+            .iter()
+            .filter(|t| t.installed.is_none())
+            .collect()
     }
 
     pub fn files_to_write(&self) -> Vec<&ToolPlan> {
@@ -133,7 +136,10 @@ mod tests {
         assert_eq!(p.languages(), vec![Lang::Go]);
         let ids: Vec<&str> = p.tools.iter().map(|t| t.spec.id).collect();
         assert!(ids.contains(&"golangci-lint"));
-        assert!(ids.contains(&"gitleaks"), "secrets tool applies to every project");
+        assert!(
+            ids.contains(&"gitleaks"),
+            "secrets tool applies to every project"
+        );
         assert!(!ids.contains(&"ruff"), "python tools must not appear");
     }
 
@@ -141,7 +147,11 @@ mod tests {
     fn respects_an_existing_config() {
         let d = scratch(&[("go.mod", "module x"), (".golangci.yml", "# mine")]);
         let p = build(&d).unwrap();
-        let gcl = p.tools.iter().find(|t| t.spec.id == "golangci-lint").unwrap();
+        let gcl = p
+            .tools
+            .iter()
+            .find(|t| t.spec.id == "golangci-lint")
+            .unwrap();
         assert!(matches!(gcl.config, Status::Exists(_)));
         assert!(!gcl.will_write());
     }
@@ -163,7 +173,11 @@ mod tests {
 
     #[test]
     fn polyglot_project_gets_tools_for_every_language() {
-        let d = scratch(&[("go.mod", "module x"), ("web/package.json", "{}"), ("Cargo.toml", "[package]")]);
+        let d = scratch(&[
+            ("go.mod", "module x"),
+            ("web/package.json", "{}"),
+            ("Cargo.toml", "[package]"),
+        ]);
         let p = build(&d).unwrap();
         let ids: Vec<&str> = p.tools.iter().map(|t| t.spec.id).collect();
         assert!(ids.contains(&"golangci-lint"));

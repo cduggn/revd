@@ -79,6 +79,10 @@ fn main() -> Result<()> {
         Cmd::Init { force } => {
             let p = plan::build(&root)?;
             report::languages(&p);
+            if p.detected.is_empty() {
+                println!("nothing to set up — run revd from a project root");
+                return Ok(());
+            }
             let written = plan::apply(&p, force)?;
             if written.is_empty() {
                 println!("\nnothing to do — already configured");

@@ -44,7 +44,10 @@ pub fn hook(plan: &Plan) {
         HookPlan::Install => "will install pre-commit hook".to_string(),
         HookPlan::Refresh => "will refresh existing revd pre-commit hook".to_string(),
         HookPlan::Foreign(p) => {
-            format!("pre-commit hook already exists and is not revd's — leaving it ({})", p.display())
+            format!(
+                "pre-commit hook already exists and is not revd's — leaving it ({})",
+                p.display()
+            )
         }
         HookPlan::NotGit => "not a git repository — no hook".to_string(),
     };
@@ -52,8 +55,11 @@ pub fn hook(plan: &Plan) {
 }
 
 pub fn notes(plan: &Plan) {
-    let noted: Vec<&crate::plan::ToolPlan> =
-        plan.tools.iter().filter(|t| !t.spec.note.is_empty()).collect();
+    let noted: Vec<&crate::plan::ToolPlan> = plan
+        .tools
+        .iter()
+        .filter(|t| !t.spec.note.is_empty())
+        .collect();
     if noted.is_empty() {
         return;
     }
@@ -89,7 +95,11 @@ pub fn registry() {
         let langs = if t.langs.is_empty() {
             "all".to_string()
         } else {
-            t.langs.iter().map(|l| l.as_str()).collect::<Vec<_>>().join(",")
+            t.langs
+                .iter()
+                .map(|l| l.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
         };
         println!("  {:<16} {:<28} {:?}  {}", t.id, langs, t.output, t.why);
     }

@@ -56,7 +56,12 @@ pub const GOLANGCI_LINT: ToolSpec = ToolSpec {
     probe: None,
     version_args: &["--version"],
     install: Install::Go("github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"),
-    config_files: &[".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json"],
+    config_files: &[
+        ".golangci.yml",
+        ".golangci.yaml",
+        ".golangci.toml",
+        ".golangci.json",
+    ],
     template: Some(Template {
         path: ".golangci.yml",
         contents: include_str!("../../templates/golangci.yml"),

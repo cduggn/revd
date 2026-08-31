@@ -159,7 +159,11 @@ mod tests {
 
     #[test]
     fn ignores_vendored_and_build_directories() {
-        let d = scratch(&["node_modules/x/package.json", "vendor/y/go.mod", "target/z/Cargo.toml"]);
+        let d = scratch(&[
+            "node_modules/x/package.json",
+            "vendor/y/go.mod",
+            "target/z/Cargo.toml",
+        ]);
         assert!(detect(&d, 3).is_empty());
     }
 

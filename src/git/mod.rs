@@ -31,4 +31,3 @@ pub fn toplevel(from: &Path) -> Result<String> {
 pub fn head(repo: &Path) -> Result<String> {
     Ok(git(repo, &["rev-parse", "HEAD"])?.trim().to_string())
 }
-

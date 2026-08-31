@@ -73,6 +73,9 @@ pub fn render(plan: &Plan) -> String {
 
 /// Write the hook. Returns the path if one was written.
 pub fn apply(plan: &Plan, force: bool) -> Result<Option<PathBuf>> {
+    if plan.detected.is_empty() {
+        return Ok(None);
+    }
     match &plan.hook {
         HookPlan::NotGit => Ok(None),
         HookPlan::Foreign(_) if !force => Ok(None),
@@ -138,8 +141,14 @@ mod tests {
         let p = crate::plan::build(&d).unwrap();
         let script = render(&p);
         assert!(script.contains("gitleaks"));
-        assert!(script.contains("fail=1"), "secrets must be able to fail the commit");
+        assert!(
+            script.contains("fail=1"),
+            "secrets must be able to fail the commit"
+        );
         assert!(script.contains("advisory"), "linters must be advisory");
-        assert!(!script.contains("__REVD_ADVISORY__"), "placeholder must be substituted");
+        assert!(
+            !script.contains("__REVD_ADVISORY__"),
+            "placeholder must be substituted"
+        );
     }
 }
