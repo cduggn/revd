@@ -100,11 +100,18 @@ fn main() -> Result<()> {
                     println!("  {:<16} {}", t.spec.id, t.spec.install.command());
                 }
             }
-            if let crate::hooks::HookPlan::Foreign(path) = &p.hook {
-                println!(
+            match &p.hook {
+                crate::hooks::HookPlan::Foreign(path) => println!(
                     "\nleft your existing pre-commit hook alone: {}\n  re-run with --force to replace it",
                     path.display()
-                );
+                ),
+                crate::hooks::HookPlan::Managed(m, path) => println!(
+                    "\n{} manages this repo's hooks ({}) — revd installed no hook.\n  to add these checks: {}",
+                    m.name(),
+                    path.display(),
+                    m.advice()
+                ),
+                _ => {}
             }
             Ok(())
         }

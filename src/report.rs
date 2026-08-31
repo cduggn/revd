@@ -49,6 +49,12 @@ pub fn hook(plan: &Plan) {
                 p.display()
             )
         }
+        HookPlan::Managed(m, p) => format!(
+            "{} manages this repo's hooks — leaving them alone\n  it runs: {}\n  to add revd's checks: {}",
+            m.name(),
+            p.display(),
+            m.advice()
+        ),
         HookPlan::NotGit => "not a git repository — no hook".to_string(),
     };
     println!("\nhook\n  {msg}");

@@ -121,6 +121,14 @@ overwrite them on a later run.
 - **Every tool is optional** — a missing binary is skipped, never an error.
 - Bypass with `git commit --no-verify`.
 
+revd honours `core.hooksPath`, so it writes where git actually looks rather
+than to `.git/hooks` unconditionally.
+
+If a hook manager already owns the repo — **pre-commit**, **husky**,
+**lefthook** or **overcommit** — revd installs nothing and tells you how to add
+the checks to that tool's own config instead. Fighting a hook manager just
+means being overwritten on its next `install`.
+
 ## Principles
 
 - **Detection is deterministic.** `go.mod`, `Cargo.toml`, `pyproject.toml`,

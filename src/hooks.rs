@@ -8,6 +8,80 @@ use crate::tools::Role;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
+/// A tool that owns this repository's git hooks. revd defers to these rather
+/// than fighting them: whatever it wrote would be overwritten on their next
+/// `install`, or ignored outright.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Manager {
+    PreCommit,
+    Husky,
+    Lefthook,
+    Overcommit,
+}
+
+impl Manager {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Manager::PreCommit => "pre-commit",
+            Manager::Husky => "husky",
+            Manager::Lefthook => "lefthook",
+            Manager::Overcommit => "overcommit",
+        }
+    }
+
+    /// How the user adds revd's checks to that manager's own config.
+    pub fn advice(&self) -> &'static str {
+        match self {
+            Manager::PreCommit => {
+                "add a `repo: local` hook to .pre-commit-config.yaml that runs your linters"
+            }
+            Manager::Husky => "add the commands to .husky/pre-commit",
+            Manager::Lefthook => "add them under `pre-commit.commands` in lefthook.yml",
+            Manager::Overcommit => "add them under `PreCommit` in .overcommit.yml",
+        }
+    }
+
+    fn config_files(&self) -> &'static [&'static str] {
+        match self {
+            Manager::PreCommit => &[".pre-commit-config.yaml", ".pre-commit-config.yml"],
+            Manager::Husky => &[".husky"],
+            Manager::Lefthook => &["lefthook.yml", "lefthook.yaml", ".lefthook.yml"],
+            Manager::Overcommit => &[".overcommit.yml"],
+        }
+    }
+
+    /// A fingerprint left in the generated hook shim, if the manager writes one.
+    fn shim_marker(&self) -> &'static str {
+        match self {
+            Manager::PreCommit => "pre-commit.com",
+            Manager::Husky => "husky",
+            Manager::Lefthook => "lefthook",
+            Manager::Overcommit => "overcommit",
+        }
+    }
+
+    const ALL: &'static [Manager] = &[
+        Manager::PreCommit,
+        Manager::Husky,
+        Manager::Lefthook,
+        Manager::Overcommit,
+    ];
+}
+
+/// Detect a hook manager from its config file, or from the shim it installed.
+fn detect_manager(root: &Path, existing_hook: Option<&str>) -> Option<Manager> {
+    for m in Manager::ALL {
+        if m.config_files().iter().any(|f| root.join(f).exists()) {
+            return Some(*m);
+        }
+    }
+    let hook = existing_hook?;
+    Manager::ALL
+        .iter()
+        .find(|m| hook.contains(m.shim_marker()))
+        .copied()
+}
+
 const TEMPLATE: &str = include_str!("../templates/pre-commit.sh");
 const MARKER: &str = "Installed by revd";
 
@@ -19,12 +93,18 @@ pub enum HookPlan {
     Refresh,
     /// Someone else's hook is there; revd will not touch it.
     Foreign(PathBuf),
+    /// A hook manager owns this repo. revd defers to it entirely.
+    Managed(Manager, PathBuf),
     /// Not a git repository.
     NotGit,
 }
 
+/// Where git will actually look for hooks. Falls back to `.git/hooks` only
+/// when git cannot be consulted.
 pub fn hook_path(root: &Path) -> PathBuf {
-    root.join(".git/hooks/pre-commit")
+    crate::git::hooks_dir(root)
+        .unwrap_or_else(|_| root.join(".git/hooks"))
+        .join("pre-commit")
 }
 
 pub fn plan(root: &Path) -> Result<HookPlan> {
@@ -32,14 +112,19 @@ pub fn plan(root: &Path) -> Result<HookPlan> {
         return Ok(HookPlan::NotGit);
     }
     let path = hook_path(root);
-    if !path.exists() {
-        return Ok(HookPlan::Install);
+    let existing = std::fs::read_to_string(&path).ok();
+
+    // A revd hook we wrote ourselves takes precedence: re-running init should
+    // refresh it rather than suddenly defer to a manager added since.
+    if existing.as_deref().is_some_and(|e| e.contains(MARKER)) {
+        return Ok(HookPlan::Refresh);
     }
-    let existing = std::fs::read_to_string(&path).unwrap_or_default();
-    if existing.contains(MARKER) {
-        Ok(HookPlan::Refresh)
-    } else {
-        Ok(HookPlan::Foreign(path))
+    if let Some(m) = detect_manager(root, existing.as_deref()) {
+        return Ok(HookPlan::Managed(m, path));
+    }
+    match existing {
+        None => Ok(HookPlan::Install),
+        Some(_) => Ok(HookPlan::Foreign(path)),
     }
 }
 
@@ -78,6 +163,8 @@ pub fn apply(plan: &Plan, force: bool) -> Result<Option<PathBuf>> {
     }
     match &plan.hook {
         HookPlan::NotGit => Ok(None),
+        // Never fight a hook manager: it would overwrite us on its next install.
+        HookPlan::Managed(..) => Ok(None),
         HookPlan::Foreign(_) if !force => Ok(None),
         _ => {
             let path = hook_path(&plan.root);
@@ -131,6 +218,74 @@ mod tests {
             crate::plan::apply(&p2, false).unwrap().is_empty(),
             "a second init must write nothing"
         );
+    }
+
+    fn repo(files: &[(&str, &str)]) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("revd-hm-{}", ulid::Ulid::new()));
+        std::fs::create_dir_all(&d).unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .arg("-q")
+            .current_dir(&d)
+            .output()
+            .unwrap();
+        std::fs::write(d.join("go.mod"), "module x").unwrap();
+        for (f, c) in files {
+            let p = d.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, c).unwrap();
+        }
+        d
+    }
+
+    #[test]
+    fn honours_core_hooks_path() {
+        let d = repo(&[(".husky/.keep", "")]);
+        std::process::Command::new("git")
+            .args(["config", "core.hooksPath", ".husky"])
+            .current_dir(&d)
+            .output()
+            .unwrap();
+        // macOS resolves /var to /private/var, so compare the tail, not the prefix.
+        let got = hook_path(&d);
+        assert!(
+            got.ends_with(".husky/pre-commit"),
+            "writing to .git/hooks when core.hooksPath is set produces a file git ignores; got {}",
+            got.display()
+        );
+    }
+
+    #[test]
+    fn defers_to_the_pre_commit_framework() {
+        let d = repo(&[(".pre-commit-config.yaml", "repos: []")]);
+        let p = crate::plan::build(&d).unwrap();
+        assert!(matches!(p.hook, HookPlan::Managed(Manager::PreCommit, _)));
+        assert!(
+            crate::plan::apply(&p, false)
+                .unwrap()
+                .iter()
+                .all(|w| !w.ends_with("pre-commit"))
+        );
+    }
+
+    #[test]
+    fn defers_to_lefthook_before_it_has_installed_its_hook() {
+        let d = repo(&[("lefthook.yml", "pre-commit:\n  commands: {}")]);
+        let p = crate::plan::build(&d).unwrap();
+        assert!(matches!(p.hook, HookPlan::Managed(Manager::Lefthook, _)));
+    }
+
+    #[test]
+    fn recognises_a_manager_from_its_shim_alone() {
+        let d = repo(&[]);
+        std::fs::create_dir_all(d.join(".git/hooks")).unwrap();
+        std::fs::write(
+            d.join(".git/hooks/pre-commit"),
+            "#!/usr/bin/env bash\n# File generated by pre-commit: https://pre-commit.com\n",
+        )
+        .unwrap();
+        let p = crate::plan::build(&d).unwrap();
+        assert!(matches!(p.hook, HookPlan::Managed(Manager::PreCommit, _)));
     }
 
     #[test]
