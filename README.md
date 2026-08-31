@@ -24,32 +24,44 @@ hook
 
 ## Install
 
-**From source** — works today, needs a Rust toolchain ([rustup.rs](https://rustup.rs)):
+**Shell installer** (macOS / Linux) — no toolchain needed:
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/cduggn/revd/releases/latest/download/revd-installer.sh | sh
+```
+
+**PowerShell** (Windows):
+
+```powershell
+irm https://github.com/cduggn/revd/releases/latest/download/revd-installer.ps1 | iex
+```
+
+**With cargo-binstall** — fetches the prebuilt binary rather than compiling:
+
+```sh
+cargo binstall revd
+```
+
+**From source** — needs a Rust toolchain ([rustup.rs](https://rustup.rs)):
 
 ```sh
 cargo install --locked --git https://github.com/cduggn/revd
 ```
 
-**Prebuilt binary** — no Rust toolchain needed. Pick your platform from the
-[latest release](https://github.com/cduggn/revd/releases/latest):
+**Manual download** — grab an archive from the
+[latest release](https://github.com/cduggn/revd/releases/latest). Each archive
+contains a top-level directory, so strip it:
 
 ```sh
-# macOS (Apple Silicon)
-curl -sSL https://github.com/cduggn/revd/releases/latest/download/revd-aarch64-apple-darwin.tar.gz | tar xz
-sudo mv revd /usr/local/bin/
-
-# Linux (x86_64)
-curl -sSL https://github.com/cduggn/revd/releases/latest/download/revd-x86_64-unknown-linux-gnu.tar.gz | tar xz
+curl -sSL https://github.com/cduggn/revd/releases/latest/download/revd-aarch64-apple-darwin.tar.xz \
+  | tar xJ --strip-components=1
 sudo mv revd /usr/local/bin/
 ```
 
-Each archive ships a `.sha256` alongside it; verify with `shasum -a 256 -c`.
-
-**Via cargo-binstall** — downloads the prebuilt binary instead of compiling:
-
-```sh
-cargo binstall revd
-```
+Targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`,
+`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`,
+`x86_64-pc-windows-msvc`. Every archive ships a `.sha256`, and each release
+carries a combined `sha256.sum`.
 
 **Build locally**:
 
@@ -57,6 +69,24 @@ cargo binstall revd
 git clone https://github.com/cduggn/revd && cd revd
 cargo build --release      # ./target/release/revd
 ```
+
+## Releasing
+
+Packaging is handled by [cargo-dist](https://github.com/axodotdev/cargo-dist);
+`.github/workflows/release.yml` is generated and should not be hand-edited.
+
+```sh
+cargo install cargo-dist --locked
+dist plan                  # what a release would produce
+dist init --yes            # regenerate CI after editing [workspace.metadata.dist]
+git tag v0.1.0 && git push --tags
+```
+
+To add a Homebrew tap later: create a `cduggn/homebrew-tap` repo, add
+`"homebrew"` to `installers` and `tap = "cduggn/homebrew-tap"` in
+`[workspace.metadata.dist]`, set a `HOMEBREW_TAP_TOKEN` secret, then re-run
+`dist init --yes`. It is left off until that repo exists, because a missing tap
+fails the release job.
 
 ## Use
 

@@ -2,3 +2,4 @@
 *.db
 *.db-wal
 *.db-shm
+# cargo-dist build output is under /target, already ignored
