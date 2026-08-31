@@ -6,6 +6,7 @@ mod lang;
 mod plan;
 mod report;
 mod tools;
+mod ui;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -60,59 +61,56 @@ fn main() -> Result<()> {
         }
         Cmd::Plan => {
             let p = plan::build(&root)?;
-            report::languages(&p);
-            report::tools(&p);
+            report::header(&p);
+            if p.detected.is_empty() {
+                println!("\n  {}\n", ui::dim("run revd from a project root"));
+                return Ok(());
+            }
+            report::table(&p);
             report::hook(&p);
-            report::notes(&p);
-            report::summary(&p);
-            println!("\nnothing was written — run `revd init` to apply");
+            report::summary(&p, false);
+            report::install_hints(&p);
+            report::hook_footnote(&p);
+            println!(
+                "\n  {}\n",
+                ui::dim("nothing written — run `revd init` to apply")
+            );
             Ok(())
         }
         Cmd::Doctor => {
             let p = plan::build(&root)?;
-            report::languages(&p);
-            report::tools(&p);
-            report::role_coverage(&p);
+            report::header(&p);
+            if p.detected.is_empty() {
+                println!("\n  {}\n", ui::dim("run revd from a project root"));
+                return Ok(());
+            }
+            report::table(&p);
             report::hook(&p);
+            report::coverage(&p);
+            report::notes(&p);
+            report::summary(&p, false);
+            report::install_hints(&p);
+            println!();
             Ok(())
         }
         Cmd::Init { force } => {
             let p = plan::build(&root)?;
-            report::languages(&p);
+            report::header(&p);
             if p.detected.is_empty() {
-                println!("nothing to set up — run revd from a project root");
+                println!(
+                    "\n  {}\n",
+                    ui::dim("nothing to set up — run revd from a project root")
+                );
                 return Ok(());
             }
             let written = plan::apply(&p, force)?;
-            if written.is_empty() {
-                println!("\nnothing to do — already configured");
-            } else {
-                println!("\nwrote:");
-                for w in &written {
-                    let shown = w.strip_prefix(&root).unwrap_or(w);
-                    println!("  {}", shown.display());
-                }
-            }
-            let missing = p.missing_tools();
-            if !missing.is_empty() {
-                println!("\ninstall the tools you want (revd never installs anything itself):");
-                for t in missing {
-                    println!("  {:<16} {}", t.spec.id, t.spec.install.command());
-                }
-            }
-            match &p.hook {
-                crate::hooks::HookPlan::Foreign(path) => println!(
-                    "\nleft your existing pre-commit hook alone: {}\n  re-run with --force to replace it",
-                    path.display()
-                ),
-                crate::hooks::HookPlan::Managed(m, path) => println!(
-                    "\n{} manages this repo's hooks ({}) — revd installed no hook.\n  to add these checks: {}",
-                    m.name(),
-                    path.display(),
-                    m.advice()
-                ),
-                _ => {}
-            }
+            report::table(&p);
+            report::hook(&p);
+            report::wrote(&p, &written);
+            report::summary(&p, true);
+            report::install_hints(&p);
+            report::hook_footnote(&p);
+            println!();
             Ok(())
         }
     }

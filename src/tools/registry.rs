@@ -118,7 +118,7 @@ pub const CLIPPY: ToolSpec = ToolSpec {
     binary: "cargo",
     probe: Some("cargo-clippy"),
     version_args: &["clippy", "--version"],
-    install: Install::Manual("rustup component add clippy"),
+    install: Install::Rustup("clippy"),
     config_files: &["clippy.toml", ".clippy.toml"],
     template: Some(Template {
         path: "clippy.toml",
@@ -127,7 +127,7 @@ pub const CLIPPY: ToolSpec = ToolSpec {
     scan_args: &["clippy", "--all-targets", "--message-format=json"],
     output: Output::Json,
     why: "the Rust linter; catches correctness and idiom problems rustc allows",
-    note: "Ships with rustup. No SARIF — emits cargo JSON diagnostics.",
+    note: "No SARIF — emits cargo JSON diagnostics.",
 };
 
 pub const PMD: ToolSpec = ToolSpec {
@@ -210,7 +210,7 @@ pub const CARGO_CHECK: ToolSpec = ToolSpec {
     scan_args: &["check", "--all-targets", "--message-format=json"],
     output: Output::Json,
     why: "compiler errors without producing a binary",
-    note: "Ships with Rust.",
+    note: "",
 };
 
 // ------------------------------------------------------------------- deps --
@@ -246,7 +246,7 @@ pub const GOFMT: ToolSpec = ToolSpec {
     scan_args: &["-l", "."],
     output: Output::Text,
     why: "canonical Go formatting; no configuration, no debate",
-    note: "Advisory only — formatting never blocks a commit.",
+    note: "",
 };
 
 pub const RUSTFMT: ToolSpec = ToolSpec {
@@ -256,13 +256,13 @@ pub const RUSTFMT: ToolSpec = ToolSpec {
     binary: "rustfmt",
     probe: None,
     version_args: &["--version"],
-    install: Install::Manual("rustup component add rustfmt"),
+    install: Install::Rustup("rustfmt"),
     config_files: &["rustfmt.toml", ".rustfmt.toml"],
     template: None,
     scan_args: &["--check"],
     output: Output::Text,
     why: "canonical Rust formatting",
-    note: "Advisory only.",
+    note: "",
 };
 
 pub const RUFF_FORMAT: ToolSpec = ToolSpec {
@@ -278,7 +278,7 @@ pub const RUFF_FORMAT: ToolSpec = ToolSpec {
     scan_args: &["format", "--check"],
     output: Output::Text,
     why: "Black-compatible formatting, same binary as the linter",
-    note: "Advisory only.",
+    note: "",
 };
 
 pub const PRETTIER: ToolSpec = ToolSpec {
@@ -294,7 +294,7 @@ pub const PRETTIER: ToolSpec = ToolSpec {
     scan_args: &["--check", "."],
     output: Output::Text,
     why: "formatting for the JS/TS ecosystem",
-    note: "Advisory only. Biome is a faster single-binary alternative.",
+    note: "Biome is a faster single-binary alternative.",
 };
 
 pub const SPOTLESS: ToolSpec = ToolSpec {
@@ -310,7 +310,7 @@ pub const SPOTLESS: ToolSpec = ToolSpec {
     scan_args: &["spotless:check"],
     output: Output::Text,
     why: "formatting via your existing build tool",
-    note: "Advisory only. Configured in the build file, not standalone.",
+    note: "Configured in your build file, not standalone.",
 };
 
 /// Every tool revd knows about. Add new specs here.

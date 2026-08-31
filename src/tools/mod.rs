@@ -45,12 +45,28 @@ pub enum Install {
     Cargo(&'static str),
     Npm(&'static str),
     Pipx(&'static str),
+    /// A rustup component: `rustup component add <name>`.
+    Rustup(&'static str),
     /// Ships with the language toolchain; nothing to install.
     Builtin,
     Manual(&'static str),
 }
 
 impl Install {
+    /// The package-manager prefix, for grouping several tools into one
+    /// copy-pasteable command. `None` means it cannot be grouped.
+    pub fn group(&self) -> Option<(&'static str, &'static str)> {
+        match self {
+            Install::Brew(p) => Some(("brew install", p)),
+            Install::Go(p) => Some(("go install", p)),
+            Install::Cargo(p) => Some(("cargo install", p)),
+            Install::Npm(p) => Some(("npm i -g", p)),
+            Install::Pipx(p) => Some(("pipx install", p)),
+            Install::Rustup(p) => Some(("rustup component add", p)),
+            Install::Manual(_) | Install::Builtin => None,
+        }
+    }
+
     pub fn command(&self) -> String {
         match self {
             Install::Brew(p) => format!("brew install {p}"),
@@ -58,6 +74,7 @@ impl Install {
             Install::Cargo(p) => format!("cargo install {p}"),
             Install::Npm(p) => format!("npm i -g {p}"),
             Install::Pipx(p) => format!("pipx install {p}"),
+            Install::Rustup(p) => format!("rustup component add {p}"),
             Install::Builtin => "(ships with the toolchain)".into(),
             Install::Manual(s) => (*s).to_string(),
         }
