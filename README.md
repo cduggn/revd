@@ -24,46 +24,40 @@ hook
 
 ## Install
 
-**Shell installer** (macOS / Linux) — no toolchain needed:
-
-```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/cduggn/revd/releases/latest/download/revd-installer.sh | sh
-```
-
-**PowerShell** (Windows):
-
-```powershell
-irm https://github.com/cduggn/revd/releases/latest/download/revd-installer.ps1 | iex
-```
-
-**With cargo-binstall** — fetches the prebuilt binary rather than compiling:
-
-```sh
-cargo binstall revd
-```
-
-**From source** — needs a Rust toolchain ([rustup.rs](https://rustup.rs)):
+Needs a Rust toolchain ([rustup.rs](https://rustup.rs)). Builds in a few
+seconds — revd has three dependencies.
 
 ```sh
 cargo install --locked --git https://github.com/cduggn/revd
 ```
 
-**Manual download** — grab an archive from the
-[latest release](https://github.com/cduggn/revd/releases/latest). Each archive
-contains a top-level directory, so strip it:
+To update, run the same command again. To uninstall: `cargo uninstall revd`.
+
+### Without a Rust toolchain
+
+> **Not available yet** — these need a tagged release. Until one is cut, use
+> the `cargo install` command above.
+
+Once `v0.1.0` is tagged:
 
 ```sh
-curl -sSL https://github.com/cduggn/revd/releases/latest/download/revd-aarch64-apple-darwin.tar.xz \
-  | tar xJ --strip-components=1
-sudo mv revd /usr/local/bin/
+# macOS / Linux
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/cduggn/revd/releases/latest/download/revd-installer.sh | sh
+
+# Windows
+irm https://github.com/cduggn/revd/releases/latest/download/revd-installer.ps1 | iex
+
+# or, fetching the prebuilt binary instead of compiling
+cargo binstall revd
 ```
 
 Targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`,
 `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`,
-`x86_64-pc-windows-msvc`. Every archive ships a `.sha256`, and each release
-carries a combined `sha256.sum`.
+`x86_64-pc-windows-msvc`. Archives contain a top-level directory, so extract
+with `--strip-components=1`. Each ships a `.sha256`, and each release carries a
+combined `sha256.sum`.
 
-**Build locally**:
+### Build locally
 
 ```sh
 git clone https://github.com/cduggn/revd && cd revd
