@@ -2,27 +2,29 @@
 name = "revd"
 version = "0.1.0"
 edition = "2024"
-description = "A grounding ledger: silent background code review with agent attribution"
+rust-version = "1.85"
+description = "Detect a project's languages and set up the linters, secret scanning and hooks they deserve"
 license = "MIT"
 repository = "https://github.com/cduggn/revd"
+homepage = "https://github.com/cduggn/revd"
+keywords = ["linter", "pre-commit", "static-analysis", "cli", "devtools"]
+categories = ["development-tools", "command-line-utilities"]
+readme = "README.md"
+exclude = ["/.github", "/docs"]
+
+[package.metadata.binstall]
+# Matches the asset names produced by .github/workflows/release.yml
+pkg-url = "{ repo }/releases/download/{ version }/revd-{ target }.tar.gz"
+pkg-fmt = "tgz"
+bin-dir = "revd"
 
 [dependencies]
 anyhow = "1"
-thiserror = "2"
 clap = { version = "4", features = ["derive"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "process", "io-util", "sync", "time", "signal"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-regex = "1"
-toml = "0.8"
-directories = "5"
+
+[dev-dependencies]
 ulid = "1"
-sha2 = "0.10"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-comfy-table = "7"
-chrono = { version = "0.4", features = ["serde"] }
 
 [profile.release]
 lto = "thin"
